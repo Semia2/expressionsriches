@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport">
+<title>Expression Riche – Stop aux mots parasites</title>
+<style>
+    :root {
+      --green: #a2d149; --yellow: #ffc000; --blue: #5b9bd5;
+      --dark: #20374c; --bg: #f4f4f4;
+    }
+    body { font-family: 'Arial Black', sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--dark); }
+    #app { background: white; max-width: 980px; margin: auto; border-radius: 15px; border: 6px solid var(--dark); padding: 25px; box-shadow: 10px 10px 0px rgba(0,0,0,0.1); }
+
+    .hidden { display: none !important; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+    .btn { background: var(--dark); color: white; border: none; padding: 15px 26px; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 1.05em; margin: 8px 6px 0 0; }
+    .btn:disabled { opacity:.45; cursor:not-allowed; }
+    .btn-success { background: #2ecc71; }
+    .btn-danger { background: #e74c3c; }
+    .btn-warn { background: #f39c12; }
+
+    .small { font-family: Arial, sans-serif; font-size: .95em; font-weight: 600; }
+    .muted { font-family: Arial, sans-serif; font-size: .92em; color:#4d5f70; }
+    .avatar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin: 20px 0; }
+    .avatar-card { background: #eee; padding: 12px; border-radius: 10px; cursor: pointer; border: 4px solid transparent; transition: 0.2s; text-align:center; }
+    .avatar-card.selected { border-color: var(--yellow); background: white; transform: scale(1.03); }
+
+    .question-box { background: #fff; padding: 20px; border: 4px dashed var(--dark); border-radius: 15px; margin: 18px 0; font-size: 1.25em; white-space: pre-line; }
+    .chip { display:inline-block; padding:.25em .6em; border:2px solid #000; border-radius:999px; background:#fff; margin-left:.4em; font-size:.75em; }
+    .chip.g { background: var(--green); }
+    .chip.y { background: var(--yellow); }
+    .chip.b { background: var(--blue); }
+
+    .cards-container { display: flex; justify-content: center; gap: 18px; margin: 18px 0; flex-wrap: wrap; }
+    .rich-card {
+      width: 230px; height: 340px; border-radius: 12px; border: 4px solid #000;
+      position: relative; padding: 0; display: flex; flex-direction: column;
+      box-shadow: 5px 5px 0px #000; cursor: pointer; overflow: hidden;
+      user-select:none;
+      transition: transform .12s ease, background-color .12s ease, box-shadow .12s ease;
+      background-color: #ddd;
+    }
+    .rich-card:hover { transform: translateY(-2px); }
+
+    /* Image carte: croppée -> pas d’écrasement */
+    .rich-card.img {
+      background-image: var(--img);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    /* ✅ Fond visible quand sélectionné (selon couleur) */
+    .rich-card.selected.green { background-color: rgba(162, 209, 73, .35); }
+    .rich-card.selected.yellow { background-color: rgba(255, 192, 0, .35); }
+    .rich-card.selected.blue { background-color: rgba(91, 155, 213, .35); }
+    .rich-card.selected {
+      transform: scale(1.04);
+      border-color: #fff;
+      box-shadow: 0 0 0 4px #000, 10px 10px 0 rgba(0,0,0,0.35);
+    }
+
+    .rich-card.validated {
+      border-color: #2ecc71;
+      box-shadow: 0 0 18px #2ecc71;
+    }
+
+    .panel {
+      border: 4px solid #000;
+      border-radius: 15px;
+      padding: 14px;
+      background: #fff;
+      margin-top: 14px;
+      box-shadow: 6px 6px 0 rgba(0,0,0,0.15);
+    }
+
+    .scoreboard { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    @media (max-width: 760px){ .scoreboard{ grid-template-columns:1fr; } }
+    .scorebox { border: 3px solid #000; border-radius: 14px; padding: 12px; background:#f9fbfd; }
+    .winner { border: 4px solid #000; border-radius: 15px; padding: 16px; background: #fffbe6; box-shadow: 6px 6px 0 rgba(0,0,0,0.15); margin-top: 14px; }
+
+    /* Modal zoom */
+    .modal { position: fixed; inset:0; background: rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; padding:18px; }
+    .modal.show { display:flex; }
+    .modal-inner { background:#fff; border:6px solid var(--dark); border-radius:15px; max-width: 920px; width: min(920px, 100%); padding: 14px; box-shadow: 12px 12px 0px rgba(0,0,0,0.25); }
+    .modal-top { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .modal-top h3 { margin:0; }
+    .zoom { width:100%; height:auto; display:block; border:4px solid #000; border-radius:12px; }
+  
+    /* ✅ Zoom: image jamais hors-écran + bouton toujours accessible */
+    .modal-inner { max-height: 92vh; overflow: auto; }
+    .modal-top { position: sticky; top: 0; background: #fff; padding-bottom: 10px; z-index: 2; }
+    .zoom { max-height: 75vh; object-fit: contain; }
+
+  
+    .topHud { display:none !important; }
+  
+    /* V18: cartes retournées (flip) */
+    .flip-card { width: 240px; height: 340px; perspective: 1000px; cursor: pointer; }
+    .flip-inner { position: relative; width: 100%; height: 100%; transition: transform .6s; transform-style: preserve-3d; }
+    .flip-card.flipped .flip-inner { transform: rotateY(180deg); }
+    .flip-face { position:absolute; inset:0; backface-visibility:hidden; border-radius:18px; box-shadow:0 12px 26px rgba(0,0,0,.12); border:2px solid rgba(0,0,0,.08); background-size: cover; background-position:center; }
+    .flip-back { transform: rotateY(0deg); }
+    .flip-front { transform: rotateY(180deg); }
+    .flip-card.selected { outline: 4px solid rgba(44, 176, 96, .55); }
+    /* Zone question sur "C'est parti" */
+    .question-box{ margin:14px auto 10px; max-width: 920px; padding:14px 16px; border-radius:14px; background:rgba(255,255,255,.7); border:1px solid rgba(0,0,0,.08); font-weight:700; }
+    /* Modal de choix (grand format iPad) */
+    #pickModal{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; padding:18px; z-index:1000;}
+    #pickModal.show{ display:flex; }
+    #pickModal .pm-inner{ width:min(520px, 96vw); background:#fff; border-radius:18px; padding:14px; box-shadow:0 18px 60px rgba(0,0,0,.25); }
+    #pickModal .pm-title{ font-weight:800; text-align:center; margin:4px 0 10px; }
+    #pickModal .pm-img{ width:100%; height:auto; border-radius:14px; border:1px solid rgba(0,0,0,.10); }
+    #pickModal .pm-actions{ display:flex; gap:10px; justify-content:center; margin-top:12px; flex-wrap:wrap; }
+
+  
+    /* V18.2: bloquer la consultation des autres cartes après 2 choix */
+    .flip-card.locked{ opacity:.55; cursor:not-allowed; }
+  
+    /* V18.5: centrage des cartes sur les écrans "C'est parti"/validation */
+    #record-cards.cards-container, #chosen-cards.cards-container, #won-cards.cards-container{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:center;
+      align-items:flex-start;
+      gap:18px;
+      margin: 14px auto 0;
+      max-width: 980px;
+    }
+  
+    
+    /* V18.7: feedback validation plus visible (bordure) */
+    .rich-card{ cursor:pointer; -webkit-tap-highlight-color: transparent; }
+    .rich-card.validated{ outline: none !important; border: 5px solid rgba(44,176,96,.95) !important; box-shadow: 0 0 0 6px rgba(44,176,96,.25), 0 12px 26px rgba(0,0,0,.12) !important; }
+    .rich-card.rejected{ outline: none !important; border: 5px solid rgba(220,53,69,.95) !important; box-shadow: 0 0 0 6px rgba(220,53,69,.25), 0 12px 26px rgba(0,0,0,.12) !important; }
+  
+    /* V18.8: validation partielle - clic/tap fiable */
+    #validation-cards .rich-card{ touch-action: manipulation; }
+  </style>
+</meta></head>
+<body>
+<div id="app">
+<div id="setup-screen">
+<h1 id="setup-title">Choisissez vos pseudos (avatars)</h1>
+
+<div class="avatar-grid" id="avatar-grid"></div>
+<div class="row">
+<button class="btn" onclick="nextSetupStep()">Confirmer</button>
+<span class="muted" id="setup-hint"></span>
+</div>
+</div>
+<div class="hidden" id="game-screen">
+<div class="panel">
+<div class="row">
+<div>
+<div class="small">Meneur: <span id="leaderName">—</span></div>
+<div class="small">Orateur: <span id="oratorName">—</span></div>
+</div>
+<div class="small">Manche <span id="round-num">1</span>/4</div>
+</div>
+<div class="muted" style="margin-top:8px;">
+</div>
+</div>
+<div class="panel" id="step-draw">
+<p class="small" id="drawPrompt">— tire une question</p>
+<button class="btn" onclick="drawQuestion()">🎲 Tirer au sort</button>
+<div class="question-box hidden" id="question-display"></div>
+</div>
+<div class="panel hidden" id="step-select">
+<p class="small" id="selectPrompt">— choisit deux cartes</p>
+<p class="muted" id="selectHint">—</p>
+<div class="cards-container" id="available-expressions"></div>
+<div class="row">
+<button class="btn btn-success" disabled="" id="btn-ready" onclick="goToRecord()">C’est parti</button>
+</div>
+
+</div><div class="panel hidden" id="step-record">
+<h2>C’est parti 🎙️</h2>
+<p class="small" id="recordPrompt">—</p>
+<p class="muted" id="recordInstructions" style="text-align:center; line-height:1.4; margin-top:10px;">—</p>
+<div id="record-question" class="question-box"></div>
+      <div id="record-cards" class="cards-container"></div>
+
+      <div class="row" style="justify-content:center;">
+<button class="btn btn-success" onclick="goToValidation()">Passer à la validation</button>
+<button class="btn" onclick="backToSelect()">Retour au choix</button>
+</div>
+</div>
+<div class="panel hidden" id="step-validation">
+<h2>Validation</h2>
+<p class="small">Le Meneur choisit le résultat</p>
+<div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top:10px;">
+<button class="btn btn-success" onclick="markOutcome('all')">✅ 0 parasite + 2 expressions → gagner les 2</button>
+<button class="btn btn-danger" onclick="markOutcome('none')">🚫 Parasites → gagner 0</button>
+<button class="btn btn-warn" onclick="markOutcome('partial')">🧩 Partiel + 0 parasite → choisir lesquelles gagner</button>
+</div>
+<div class="muted" id="validation-help" style="text-align:center; margin-top:12px;"></div>
+<div class="cards-container" id="validation-cards"></div>
+<div class="row">
+<button class="btn btn-success" disabled="" id="btn-confirm-result" onclick="confirmResult()">Confirmer &amp; manche suivante</button>
+<button class="btn" onclick="backToSelect()">Retour au choix</button>
+</div>
+</div>
+<div class="hidden" id="end-screen">
+<div class="winner" id="winnerBox"></div>
+<div class="scoreboard">
+<div class="scorebox">
+<div class="name"><b id="p1Name">—</b></div>
+<div class="pts">Score: <b id="p1Score">0</b> pts</div>
+<div class="muted" style="margin-top:8px;">Cartes gagnées:</div>
+<div class="cards-container" id="p1Cards" style="justify-content:flex-start;"></div>
+</div>
+<div class="scorebox">
+<div class="name"><b id="p2Name">—</b></div>
+<div class="pts">Score: <b id="p2Score">0</b> pts</div>
+<div class="muted" style="margin-top:8px;">Cartes gagnées:</div>
+<div class="cards-container" id="p2Cards" style="justify-content:flex-start;"></div>
+</div>
+</div>
+<div style="text-align:center; margin-top:14px;">
+<button class="btn" onclick="restart()">Rejouer</button>
+</div>
+</div>
+</div>
+</div>
+<div class="modal" id="modal">
+<div class="modal-inner" onclick="event.stopPropagation()">
+<div class="modal-top">
+<h3 id="modal-title">Carte</h3>
+<button class="btn" onclick="closeModal()">Fermer</button>
+</div>
+<div style="margin-top:12px;">
+<img alt="Zoom carte" class="zoom" id="modal-img"/>
+</div>
+</div>
+</div>
+<script>
+const CARD_BACK = 'assets/card_back.png';
+
+const data = {
+  avatars: [
+    { name: "Orateur Masqué", icon: "🎭" }, { name: "Magicienne", icon: "🧙‍♀️" },
+    { name: "Chevalier Syntaxe", icon: "⚔️" }, { name: "Ambassadeur", icon: "🧘‍♂️" },
+    { name: "Sentinelle", icon: "🤫" }, { name: "Hibou Philosophe", icon: "🦉" },
+    { name: "Renard Astucieux", icon: "🦊" }, { name: "Perroquet Savant", icon: "🦜" },
+    { name: "Panthère Fluide", icon: "🐆" }, { name: "Scaphandrier", icon: "🤿" },
+    { name: "Alchimiste", icon: "⚗️" }, { name: "Botaniste", icon: "🌱" }
+  ],
+  questions: ["Explique comment tu fais un sandwich tout seul\n🟢🟡", "Explique comment tu prépares ton sac pour partir en course d'école\n🟢🟡", "Explique comment on cuisine des spaghettis\n🟢🟡", "Raconte comment serait ta journée idéale, du matin au soir\n🟢🟡🔵", "Explique comment on fait un gâteau au chocolat\n🟢🟡", "Raconte comment tu t'habilles un matin d'hiver\n🟢🟡", "Explique comment on met la table pour un repas de fête\n🟢🟡", "Décris toutes les étapes pour fabriquer un avion en papier\n🟢🟡", "Raconte en quelques phrases l'histoire du Petit Chaperon Rouge\n🟢🟡", "Explique comment tu organises une fête d'anniversaire\n🟢🟡🔵", "Décris toutes les étapes pour construire une cabane avec des couvertures sans qu’elles tombent\n🟢🟡", "Décris comment tu préparerais ta valise pour partir une semaine en vacances d’hiver\n🟢🟡", "Décris le pays dans lequel tu rêves de voyager et explique pourquoi\n🟢🟡🔵", "Raconte ce que tu ferais si tu pouvais voler pendant une journée\n🟢🟡🔵", "Imagine que tu peux parler aux animaux. Que leur dirais-tu ?\n🟢🟡🔵", "Décris la maison de tes rêves, pièce par pièce\n🟢🟡🔵", "Imagine que tu peux voyager dans le temps. À quelle époque irais-tu et pourquoi ?\n🟢🟡🔵", "Organise une fête d'anniversaire pour ton chat ou ton chien et explique toutes les étapes\n🟢🟡🔵", "Explique précisément le chemin que tu parcours pour venir à l'école\n🟢", "Décris exactement ce que tu vois depuis la fenêtre de ta chambre\n🟢", "Décris le métier que tu aimerais faire plus tard et pourquoi\n🟢🟡🔵", "Explique comment on se lave les dents correctement\n🟢🟡", "Explique comment on fait une salade de fruits\n🟢🟡", "Raconte comment tu prends soin de ton animal de compagnie\n🟢🟡🔵", "Explique comment on fabrique un château de sable\n🟢🟡", "Imagine que tu peux te téléporter n'importe où, où vas-tu et pourquoi ?\n🟢🟡🔵", "Décris ton repas préféré et explique pourquoi tu l'aimes\n🟢🟡🔵", "Imagine que tu rencontres ton personnage préféré, que lui dis-tu ?\n🟢🟡🔵", "Explique pourquoi ton sport/activité préféré(e) est important(e) pour toi\n🟢🟡🔵", "Raconte pourquoi tu aimes ou n'aimes pas l'hiver\n🟢🟡🔵", "Explique ce que tu préfères entre la ville et la campagne, et pourquoi\n🟢🟡🔵", "Explique ce que signifie être un bon ami pour toi\n🟢🟡🔵"],
+  expressions: [
+    { id:"RESSEMBLE", title:"ÇA RESSEMBLE À", color:"yellow", pts:5000, img:"cards/RESSEMBLE.png" },
+    { id:"AVRAIDIRE", title:"À VRAI DIRE", color:"green", pts:1000, img:"cards/AVRAIDIRE.png" },
+    { id:"COMME", title:"C’EST COMME SI", color:"yellow", pts:5000, img:"cards/COMME.png" },
+    { id:"SELONMOI", title:"SELON MOI", color:"blue", pts:10000, img:"cards/SELONMOI.png" },
+    { id:"FIGURETOI", title:"FIGURE-TOI QUE", color:"yellow", pts:5000, img:"cards/FIGURETOI.png" },
+    { id:"JEVOUDRAIS", title:"JE VOUDRAIS DIRE QUE", color:"blue", pts:10000, img:"cards/JEVOUDRAIS.png" },
+    { id:"ENREALITE", title:"EN RÉALITÉ", color:"green", pts:1000, img:"cards/ENREALITE.png" },
+    { id:"PAREXEMPLE", title:"PAR EXEMPLE", color:"green", pts:1000, img:"cards/PAREXEMPLE.png" },
+    { id:"ECOUTE", title:"ÉCOUTE", color:"green", pts:1000, img:"cards/ECOUTE.png" },
+    { id:"IMAGINE", title:"IMAGINE QUE", color:"yellow", pts:5000, img:"cards/IMAGINE.png" }
+  ]
+};
+
+let setupStep = 1;
+let p1 = null, p2 = null;
+let players = [];
+let round = 1;
+
+let currentQuestion = null;
+let requiredColors = [];
+let selectedIds = [];
+let outcomeMode = null;
+
+function rolesForRound(r){
+  const oratorIndex = (r % 2 === 1) ? 0 : 1; // P1, P2, P1, P2
+  const leaderIndex = oratorIndex === 0 ? 1 : 0;
+  return { leaderIndex, oratorIndex };
+}
+
+function init(){
+  initAvatars();
+  document.getElementById('setup-hint').innerText = "Manche 1: le joueur 1 est Orateur.";
+}
+
+function initAvatars() {
+  const grid = document.getElementById('avatar-grid');
+  grid.innerHTML = '';
+  data.avatars.forEach(av => {
+    const div = document.createElement('div');
+    div.className = 'avatar-card';
+    div.innerHTML = `<div style="font-size:3em">${av.icon}</div><div>${av.name}</div>`;
+    div.onclick = () => {
+      document.querySelectorAll('.avatar-card').forEach(c => c.classList.remove('selected'));
+      div.classList.add('selected');
+      if (setupStep === 1) p1 = av; else p2 = av;
+    };
+    grid.appendChild(div);
+  });
+}
+
+function nextSetupStep() {
+  if (setupStep === 1 && p1) {
+    setupStep = 2;
+    document.getElementById('setup-title').innerText = "Joueur 2: choisis ton avatar";
+    document.getElementById('setup-hint').innerText = "Manche 2 et 4: le joueur 2 est Orateur.";
+    initAvatars();
+  } else if (setupStep === 2 && p2) {
+    players = [
+      { av: p1, keptIds: [], score: 0 },
+      { av: p2, keptIds: [], score: 0 }
+    ];
+    round = 1;
+    resetTurnState();
+
+    document.getElementById('setup-screen').classList.add('hidden');
+    document.getElementById('game-screen').classList.remove('hidden');
+    renderHeader();
+  }
+}
+
+function renderHeader(){
+  const {leaderIndex, oratorIndex} = rolesForRound(round);
+  document.getElementById('leaderName').innerText = `${players[leaderIndex].av.icon} ${players[leaderIndex].av.name}`;
+  document.getElementById('oratorName').innerText = `${players[oratorIndex].av.icon} ${players[oratorIndex].av.name}`;
+  document.getElementById('round-num').innerText = round;
+
+  // ✅ Affichage élève: qui fait quoi
+  const leaderLabel = `${players[leaderIndex].av.icon} ${players[leaderIndex].av.name}`;
+  const oratorLabel = `${players[oratorIndex].av.icon} ${players[oratorIndex].av.name}`;
+  const dp = document.getElementById('drawPrompt');
+  if(dp) dp.innerText = `${leaderLabel} tire une question`;
+  const sp = document.getElementById('selectPrompt');
+  if(sp) sp.innerText = `${oratorLabel} choisit deux cartes`;
+  // ✅ Page “C’est parti” (enregistrement)
+  const rp = document.getElementById('recordPrompt');
+  const ri = document.getElementById('recordInstructions');
+  if(rp) rp.innerText = "";
+  if(ri) ri.innerHTML = `${leaderLabel} enregistre ${oratorLabel} avec l’app Dictaphone pendant 30 secondes (40 secondes max).<br>Écoutez l’enregistrement et validez selon les 3 propositions.`;
+
+}
+
+
+function parseColors(qText){
+  const colors = [];
+  if (qText.includes("🟢")) colors.push("green");
+  if (qText.includes("🟡")) colors.push("yellow");
+  if (qText.includes("🔵")) colors.push("blue");
+  return colors;
+}
+
+function resetTurnState(){
+  currentQuestion = null;
+  requiredColors = [];
+  selectedIds = [];
+  outcomeMode = null;
+
+  document.getElementById('step-draw').classList.remove('hidden');
+  document.getElementById('question-display').classList.add('hidden');
+  document.getElementById('step-select').classList.add('hidden');
+  document.getElementById('step-validation').classList.add('hidden');
+  const rec = document.getElementById('step-record');
+  if(rec) rec.classList.add('hidden');
+  document.getElementById('available-expressions').innerHTML = "";
+  document.getElementById('validation-cards').innerHTML = "";
+  document.getElementById('validation-help').innerText = "";
+  document.getElementById('btn-ready').disabled = true;
+  document.getElementById('btn-confirm-result').disabled = true;
+}
+
+function chipHtml(c){
+  if(c==="green") return `<span class="chip g">VERT</span>`;
+  if(c==="yellow") return `<span class="chip y">JAUNE</span>`;
+  return `<span class="chip b">BLEU</span>`;
+}
+
+function drawQuestion(){
+  currentQuestion = data.questions[Math.floor(Math.random() * data.questions.length)];
+  requiredColors = parseColors(currentQuestion);
+  selectedIds = [];
+
+  // ✅ Afficher seulement la consigne (sans pastilles/couleurs)
+  let qText = currentQuestion.split("\n")[0].trim();
+  // Ponctuation: garder ?/!/. si déjà présent, sinon ajouter un point.
+  if(!/[\?\!\.]$/.test(qText)) qText = qText + ".";
+
+  const qDiv = document.getElementById('question-display');
+  qDiv.textContent = qText;
+  qDiv.classList.remove('hidden');
+
+  document.getElementById('step-select').classList.remove('hidden');
+
+  const allowed = data.expressions.filter(e => requiredColors.includes(e.color));
+  renderSelectionCards(allowed);
+}
+
+function createFaceCard(exp){
+  // Carte simple (face visible) pour "C’est parti" et "Validation"
+  const img = document.createElement('img');
+  img.src = exp.img;
+  img.alt = exp.label || "Carte";
+  img.className = 'rich-card card-img';
+  img.dataset.id = exp.id;
+  img.style.width = "220px";
+  img.style.height = "324px";
+  img.style.borderRadius = "18px";
+  img.style.boxShadow = "0 12px 26px rgba(0,0,0,.12)";
+  img.style.border = "2px solid rgba(0,0,0,.08)";
+  img.style.objectFit = "cover";
+  return img;
+}
+
+function createFaceCard(exp){
+  // Carte simple (face visible) pour "C’est parti" et "Validation"
+  const img = document.createElement('img');
+  img.src = exp.img;
+  img.alt = exp.label || "Carte";
+  img.className = 'card-img';
+  img.style.width = "220px";
+  img.style.height = "324px";
+  img.style.borderRadius = "18px";
+  img.style.boxShadow = "0 12px 26px rgba(0,0,0,.12)";
+  img.style.border = "2px solid rgba(0,0,0,.08)";
+  img.style.objectFit = "cover";
+  return img;
+}
+
+
+function createCard(exp){
+  // V18: carte retournée (dos -> face)
+  const wrap = document.createElement('div');
+  wrap.className = 'flip-card';
+  wrap.dataset.id = exp.id;
+  wrap.dataset.color = exp.color;
+
+  const inner = document.createElement('div');
+  inner.className = 'flip-inner';
+
+  const back = document.createElement('div');
+  back.className = 'flip-face flip-back';
+  back.style.backgroundImage = `url('${CARD_BACK}')`;
+
+  const front = document.createElement('div');
+  front.className = 'flip-face flip-front';
+  front.style.backgroundImage = `url('${exp.img}')`;
+
+  inner.appendChild(back);
+  inner.appendChild(front);
+  wrap.appendChild(inner);
+
+  return wrap;
+}
+
+function renderSelectionCards(allowed){
+  const container = document.getElementById('available-expressions');
+  container.innerHTML = "";
+
+  allowed.forEach(exp=>{
+    const card = createCard(exp);
+
+    card.onclick = () => {
+      // Si déjà sélectionnée: on ne peut plus l'annuler (hasard imposé)
+      if(card.classList.contains('selected')){
+        openPickModal(exp, card, 'view');
+        return;
+      }
+      // Si déjà 2 cartes choisies, on bloque l'accès aux autres cartes
+      if(selectedIds.length >= 2){
+        return;
+      }
+      openPickModal(exp, card);
+    };
+
+    container.appendChild(card);
+  });
+
+  // reset
+  updateReadyButton();
+}
+
+function resetSelection(){
+  selectedIds = [];
+  const container = document.getElementById('available-expressions');
+  [...container.children].forEach(el => el.classList.remove('selected'));
+  document.getElementById('btn-ready').disabled = true;
+}
+
+
+
+function updateReadyButton(){
+  document.getElementById('btn-ready').disabled = (selectedIds.length !== 2);
+  // petit feedback: mettre en évidence les cartes sélectionnées
+  const container = document.getElementById('available-expressions');
+  if(container){
+    [...container.children].forEach(el=>{
+      const isSel = selectedIds.includes(el.dataset.id);
+      el.classList.toggle('selected', isSel);
+      if(isSel) el.classList.add('flipped');
+
+      // Bloquer les cartes non sélectionnées si 2 cartes sont déjà choisies
+      const shouldLock = (selectedIds.length >= 2) && !isSel;
+      el.classList.toggle('locked', shouldLock);
+    });
+  }
+}
+
+function goToRecord(){
+  if(selectedIds.length !== 2) return;
+
+  document.getElementById('step-draw').classList.add('hidden');
+  document.getElementById('step-select').classList.add('hidden');
+  document.getElementById('step-record').classList.remove('hidden');
+
+  
+  // ✅ Afficher la question tirée au sort
+  const qBox = document.getElementById('record-question');
+  const qShown = document.getElementById('question-display');
+  if(qBox){
+    const txt = (qShown && qShown.textContent) ? qShown.textContent.trim() : "";
+    qBox.textContent = txt || "—";
+  }
+const box = document.getElementById('record-cards');
+  if(box){
+    box.innerHTML = "";
+    selectedIds.forEach(id=>{
+      const exp = data.expressions.find(e=>e.id===id);
+      if(!exp) return;
+      const card = createFaceCard(exp);
+      card.style.width = "200px";
+      card.style.height = "296px";
+      box.appendChild(card);
+    });
+  }
+}
+
+function goToValidation(){
+  if(selectedIds.length !== 2) return;
+
+  // si on vient de l’étape “enregistrement”
+  const rec = document.getElementById('step-record');
+  if(rec) rec.classList.add('hidden');
+  document.getElementById('step-draw').classList.add('hidden');
+  document.getElementById('step-select').classList.add('hidden');
+  document.getElementById('step-validation').classList.remove('hidden');
+
+  outcomeMode = null;
+  document.getElementById('validation-help').innerText = "Choisis un résultat.";
+
+  const valContainer = document.getElementById('validation-cards');
+  valContainer.innerHTML = "";
+
+  selectedIds.forEach(id=>{
+    const exp = data.expressions.find(e=>e.id===id);
+    const card = createFaceCard(exp);
+    card.classList.add('rich-card');
+    card.dataset.id = id;
+
+    // En "partiel": on peut cliquer pour marquer gagnée / non gagnée
+    card.onclick = () => {
+      if(outcomeMode !== "partial") return;
+      card.classList.toggle('validated');
+      card.classList.remove('rejected');
+    };
+
+    valContainer.appendChild(card);
+  });
+
+  document.getElementById('btn-confirm-result').disabled = true;
+}
+
+function backToSelect(){
+  const rec = document.getElementById('step-record');
+  if(rec) rec.classList.add('hidden');
+  document.getElementById('step-validation').classList.add('hidden');
+  document.getElementById('step-select').classList.remove('hidden');
+  document.getElementById('btn-confirm-result').disabled = true;
+  outcomeMode = null;
+  document.getElementById('validation-help').innerText = "";
+}
+
+function markOutcome(mode){
+  outcomeMode = mode;
+  const cards = [...document.querySelectorAll('#validation-cards .rich-card')];
+  cards.forEach(c=> c.classList.remove('validated','rejected'));
+
+  if(mode === "all"){
+    cards.forEach(c=> c.classList.add('validated'));
+    document.getElementById('validation-help').innerText = "Gagné: l’Orateur remporte les 2 cartes.";
+    document.getElementById('btn-confirm-result').disabled = false;
+    return;
+  }
+  if(mode === "none"){
+    cards.forEach(c=> c.classList.add('rejected'));
+    document.getElementById('validation-help').innerText = "Raté: l’Orateur ne gagne aucune carte.";
+    document.getElementById('btn-confirm-result').disabled = false;
+    return;
+  }
+  if(mode === "partial"){
+    document.getElementById('validation-help').innerText = "Partiel: clique les cartes gagnées (0, 1 ou 2).";
+    document.getElementById('btn-confirm-result').disabled = false;
+    return;
+  }
+}
+
+function confirmResult(){
+  let kept = [];
+  const validated = [...document.querySelectorAll('#validation-cards .rich-card.validated')].map(el => el.dataset.id);
+
+  if(outcomeMode === "all") kept = [...selectedIds];
+  else if(outcomeMode === "none") kept = [];
+  else if(outcomeMode === "partial") kept = validated;
+  else return;
+
+  const {oratorIndex} = rolesForRound(round);
+  kept.forEach(id=>{
+    players[oratorIndex].keptIds.push(id); // ✅ l’autre joueur pourra aussi gagner cette carte plus tard
+    const exp = data.expressions.find(e=>e.id===id);
+    if(exp) players[oratorIndex].score += exp.pts;
+  });
+
+  round++;
+  if(round > 4){
+    showEnd();
+    return;
+  }
+
+  resetTurnState();
+  renderHeader();
+}
+
+function showEnd(){
+  document.getElementById('step-draw').classList.add('hidden');
+  document.getElementById('step-select').classList.add('hidden');
+  document.getElementById('step-validation').classList.add('hidden');
+  document.getElementById('end-screen').classList.remove('hidden');
+
+  document.getElementById('p1Name').innerText = `${players[0].av.icon} ${players[0].av.name}`;
+  document.getElementById('p2Name').innerText = `${players[1].av.icon} ${players[1].av.name}`;
+  document.getElementById('p1Score').innerText = players[0].score;
+  document.getElementById('p2Score').innerText = players[1].score;
+
+  const p1c = document.getElementById('p1Cards');
+  const p2c = document.getElementById('p2Cards');
+  p1c.innerHTML = ""; p2c.innerHTML = "";
+
+  function miniCard(id){
+    const exp = data.expressions.find(e=>e.id===id);
+    const card = createFaceCard(exp);
+    card.style.width = "150px";
+    card.style.height = "222px";
+    card.style.boxShadow = "4px 4px 0px #000";
+    card.onclick = null;
+    return card;
+  }
+
+  if(players[0].keptIds.length === 0) p1c.innerHTML = '<div class="muted">—</div>';
+  else players[0].keptIds.forEach(id=> p1c.appendChild(miniCard(id)));
+
+  if(players[1].keptIds.length === 0) p2c.innerHTML = '<div class="muted">—</div>';
+  else players[1].keptIds.forEach(id=> p2c.appendChild(miniCard(id)));
+
+  let msg = "";
+  if(players[0].score > players[1].score) msg = `🏆 <b>${players[0].av.icon} ${players[0].av.name}</b> gagne avec <b>${players[0].score}</b> pts.`;
+  else if(players[1].score > players[0].score) msg = `🏆 <b>${players[1].av.icon} ${players[1].av.name}</b> gagne avec <b>${players[1].score}</b> pts.`;
+  else msg = `🤝 Égalité: <b>${players[0].score}</b> pts chacun.`;
+
+  document.getElementById('winnerBox').innerHTML = msg + '<div class="muted" style="margin-top:8px;">Fin après 4 manches (P1,P2,P1,P2).</div>';
+}
+
+function restart(){ location.reload(); }
+
+function openModal(exp){
+  document.getElementById('modal-title').innerText = exp.title;
+  document.getElementById('modal-img').src = exp.img;
+  document.getElementById('modal').classList.add('show');
+}
+
+// V18: modal de choix (grand format)
+let pendingPick = null; // {exp, cardEl}
+
+function openPickModal(exp, cardEl, mode='pick'){
+  pendingPick = {exp, cardEl, mode};
+  const pm = document.getElementById('pickModal');
+  document.getElementById('pmImg').src = exp.img;
+
+  if(mode === 'view'){
+    document.getElementById('pmTitle').innerText = `Carte sélectionnée`;
+    const keep = document.getElementById('pmKeepBtn');
+    keep.innerText = "Fermer";
+    keep.className = "btn"; // neutral
+    pm.classList.add('show');
+    return;
+  }
+
+  const next = selectedIds.length + 1;
+  document.getElementById('pmTitle').innerText = `Choix de carte (${Math.min(next,2)}/2)`;
+  const keep = document.getElementById('pmKeepBtn');
+  keep.className = "btn btn-success";
+  keep.innerText = (next===2) ? "Valider la carte (2/2)" : "Valider la carte (1/2)";
+  pm.classList.add('show');
+}
+
+function closePickModal(){
+  const pm = document.getElementById('pickModal');
+  pm.classList.remove('show');
+  pendingPick = null;
+}
+
+function keepPickedCard(){
+  if(!pendingPick) return;
+  if(pendingPick.mode==='view'){ closePickModal(); return; }
+  const {exp, cardEl} = pendingPick;
+
+  if(selectedIds.includes(exp.id)){
+    closePickModal();
+    return;
+  }
+  if(selectedIds.length >= 2){
+    // si déjà 2, on ne remplace pas silencieusement: on bloque.
+    closePickModal();
+    return;
+  }
+  selectedIds.push(exp.id);
+
+  // retourner + marquer sélection
+  cardEl.classList.add('flipped','selected');
+
+  updateReadyButton();
+  closePickModal();
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  const pm = document.getElementById('pickModal');
+  if(pm){
+    pm.addEventListener('click', (e)=>{ if(e.target.id==='pickModal') closePickModal(); });
+    document.getElementById('pmKeepBtn').addEventListener('click', keepPickedCard);
+  }
+});
+
+function closeModal(){ document.getElementById('modal').classList.remove('show'); }
+
+
+// ✅ Fermer le zoom en cliquant sur le fond noir
+document.getElementById('modal').addEventListener('click', (e) => {
+  if (e.target.id === 'modal') closeModal();
+});
+// ✅ Fermer le zoom avec la touche Échap
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+});
+init();
+</script>
+
+  <!-- V18: modal de sélection des cartes -->
+  <div id="pickModal" role="dialog" aria-modal="true">
+    <div class="pm-inner" onclick="event.stopPropagation()">
+      <div class="pm-title" id="pmTitle">Carte</div>
+      <img id="pmImg" class="pm-img" src="" alt="Carte sélectionnée">
+      <div class="pm-actions">
+        <button class="btn btn-success" id="pmKeepBtn">Valider la carte</button>
+</div>
+    </div>
+  </div>
+
+</body>
+</html>
